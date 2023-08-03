@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./test-data/mapbox-api-responses",
+        "./visualization-helpers"
+    ]
+}
