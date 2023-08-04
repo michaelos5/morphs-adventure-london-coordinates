@@ -3,11 +3,21 @@ import sys, os
 import requests
 import geo_json_creator
 import approximate_route
-import mapbox_apis
 current_dir = os.path.dirname(os.path.abspath(__file__))
+
+api_access_path = module_path = os.path.join(current_dir, "api-accessors")
+sys.path.append(api_access_path)
+import mapbox_apis
+import gmaps_api
+import open_route_service
 module_path = os.path.join(current_dir, "test-data", "mapbox-api-responses")
 sys.path.append(module_path)
 import dataset_features_response
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+module_path = os.path.join(current_dir, "visualization-helpers")
+sys.path.append(module_path)
+import output_folium_map
     
 
     
@@ -32,12 +42,19 @@ def splitPerAPIRestrictions(dataset_features, API_CEILING_LIMIT_PER_REQUEST):
 
     return split_data
 
+def sortByIndex(feature):
+    return feature['properties']['index']
+
+
 def launchOptimizationJob(orderedDatasetFeatures):
     # print(dataset_features)
-    GPS_POINT_LIMIT_PER_REQUEST = 12
+    GPS_POINT_LIMIT_PER_REQUEST = 11
     requestBundle = []
-    for requestBundle in splitPerAPIRestrictions(orderedDatasetFeatures, GPS_POINT_LIMIT_PER_REQUEST):
-        requestBundle += mapbox_apis.sendOptimizationRequest('walking',orderedDatasetFeatures)
+    for request in splitPerAPIRestrictions(orderedDatasetFeatures, GPS_POINT_LIMIT_PER_REQUEST):
+        #requestBundle.append(mapbox_apis.sendOptimizationRequest('walking',request))
+        #requestBundle.append(gmaps_api.sendOptimizationRequest(request))
+        requestBundle.append(open_route_service.sendOptimizationRequest(request))
+    
     return requestBundle
 
 
@@ -68,6 +85,19 @@ print("Retrieve Mapbox Dataset Features")
 #datasetFeatures = mapbox_apis.getDatasetFeatures()
 datasetFeatures = dataset_features_response.fetchDatasetFeatures()
 print('Retrieved {0} features from Mapbox Dataset'.format(len(datasetFeatures)))
-print(datasetFeatures)
-orderedFeatures = approximate_route.approximatePathOrdering(datasetFeatures)
-#launchOptimizationJob(orderedFeatures)
+
+datasetFeatures.sort(key=lambda x: x['properties']['index'], reverse=True)
+
+# Sort the original array based on the ordering array
+#sorted_array = [x for _, x in sorted(zip(ordering_array, datasetFeatures))]
+
+ordered_gps_points = approximate_route.approximatePathOrdering(datasetFeatures)
+ordered_features = []
+for point in ordered_gps_points:
+    for feature in datasetFeatures:
+        if feature['geometry']['coordinates'][1] == point[0] and feature['geometry']['coordinates'][0] == point[1]:
+            ordered_features.append(feature)
+
+requestBundle = launchOptimizationJob(ordered_features)
+#geometry = requestBundle[0].get('trips',[])[0]['geometry']
+output_folium_map.generateMap(ordered_features,ordered_gps_points,requestBundle)

@@ -1,11 +1,6 @@
 from geopy.distance import geodesic
 from itertools import permutations
-import sys,os
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-module_path = os.path.join(current_dir, "visualization-helpers")
-sys.path.append(module_path)
-import output_folium_map
+import math
 
 def calculate_distance(coords1, coords2):
     return geodesic(coords1, coords2).kilometers
@@ -44,19 +39,36 @@ def find_optimal_route(points):
 
     return optimal_route, min_distance
 
+
+def distance(point1, point2):
+    lat1, lng1 = point1
+    lat2, lng2 = point2
+    return math.sqrt((lat2 - lat1)**2 + (lng2 - lng1)**2)
+
+def nearest_neighbor_tsp(points, start_point):
+    tour = [start_point]
+    remaining_points = set(points)
+    remaining_points.remove(start_point)
+
+    while remaining_points:
+        nearest_point = min(remaining_points, key=lambda x: distance(tour[-1], x))
+        tour.append(nearest_point)
+        remaining_points.remove(nearest_point)
+
+    #tour.append(start_point) # enable for return to starting point
+
+    return tour
+
 def approximatePathOrdering(datasetFeatures):
     # Using Nearest Neighbor algorithm to get an approximate optimal route
     gps_points = []
     for feature in datasetFeatures:
         gps_points.append((feature['geometry']['coordinates'][1], feature['geometry']['coordinates'][0]))
-    nn_route = nearest_neighbor_algorithm(gps_points)
-    print("Nearest Neighbor route:", nn_route)
-    output_folium_map.generateMap(gps_points,nn_route)
+        
+    #nn_route = nearest_neighbor_algorithm(gps_points)
+    starting_point = (51.50448,-0.07662)
 
-    # Finding the truly optimal route by brute-force (works well for small number of points)
-    """
-    optimal_route, min_distance = find_optimal_route(gps_points)
-    print("Optimal route:", optimal_route)
-    print("Total distance (optimal):", min_distance, "km")
-    """
-    return datasetFeatures
+    # Find the optimal tour starting from the chosen data point
+    ordered_gps_points = nearest_neighbor_tsp(points=gps_points, start_point=starting_point)
+    print("Nearest Neighbor route calculated")
+    return ordered_gps_points
