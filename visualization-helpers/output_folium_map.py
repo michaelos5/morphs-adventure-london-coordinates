@@ -5,7 +5,7 @@ import polyline
 from math import radians, sin, cos, sqrt, atan2
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-export_path = os.path.join(current_dir, "exports", "gps_data_map.html")
+export_path = os.path.join(current_dir, "exports","static_site", "gps_data_map.html")
 
 def createPopup(idx,point):
     title = point['properties']['title']
@@ -17,6 +17,13 @@ def createPopup(idx,point):
     '''
     return template.format(idx=idx,title=title,address=address)
 
+def createSegmentPopup(idx,segment_name):
+    template = '''
+    <h3>Segment {idx}</h3><br>
+    <b>Segment Name:</b>{segment_name}<br>
+    '''
+    return template.format(idx=idx,segment_name=segment_name)
+    
 def centerMapByPoints(gps_points):
     return [51.5225776,-0.1214206]
 
@@ -43,7 +50,23 @@ def routeLength(route):
         total_length += segment_length
 
     return total_length
+
+def routeLengthGeoJSON(route):
+    route_length = 0
+    for section in route:
+        route_length += routeLength(section['coordinates'])
+
+    return route_length
+
+def runningRouteStyle(feature):
+    return {
+    "color": "#F28C28",    # Red color
+    "weight": 4,           # Line thickness
+    "opacity": 0.9         # Line opacity
+    }
+
 def generateMap(ordered_features,nn_route,geometry):
+    routeLengthOpenRoute = routeLengthGeoJSON(geometry)
     # Create a map centered at a specific location
     map_center = centerMapByPoints(gps_points=ordered_features)  # Replace latitude and longitude with your GPS data
     map_zoom = 13  # Adjust the zoom level as needed
@@ -56,9 +79,14 @@ def generateMap(ordered_features,nn_route,geometry):
         popup = createPopup(idx+1,point)
         folium.Marker(location=[lat, lng],popup=popup).add_to(map_osm)
     folium.PolyLine(locations=nn_route, color='red', tooltip="Approximate Route").add_to(map_osm)
-    for direction_split in geometry:
-        folium.GeoJson(direction_split).add_to(map_osm)
-    print("Total length of the Route:", routeLength(nn_route), "kilometers")
+    for idx,direction_split in enumerate(geometry):
+        temp = direction_split
+        temp['properties'] = {}
+        temp['properties']['name'] = ('Segment: ' + str(idx+1))
+        popup = createSegmentPopup(idx+1,temp)
+        folium.GeoJson(data=temp,style_function=runningRouteStyle,popup=popup).add_to(map_osm)
+    print("Total TSP length of the Route:", routeLength(nn_route), "kilometers")
+    print("Total OpenRoute length of the Route:", routeLengthOpenRoute, "kilometers")
     map_osm.save(export_path)
     webbrowser.open(export_path)
     return None

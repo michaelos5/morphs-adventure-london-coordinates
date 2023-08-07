@@ -1,7 +1,7 @@
 import requests
 
 URL_START = "https://api.mapbox.com"
-API_TOKEN = 'sk.eyJ1IjoidGVjaG5vd29sZiIsImEiOiJjbGt2Z2MwZjUwOTZoM3BtenE0bW51a204In0.V7_wHrtToXeC1bexppCUAg'
+API_TOKEN = ''
 
 
 def sendOptimizationRequest(travel_style,approximate_route):

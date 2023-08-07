@@ -1,10 +1,8 @@
 import json
 import sys, os
-import requests
-import geo_json_creator
 import approximate_route
-current_dir = os.path.dirname(os.path.abspath(__file__))
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
 api_access_path = module_path = os.path.join(current_dir, "api-accessors")
 sys.path.append(api_access_path)
 import mapbox_apis
@@ -19,6 +17,8 @@ module_path = os.path.join(current_dir, "visualization-helpers")
 sys.path.append(module_path)
 import output_folium_map
     
+#Set to false if you want to use the live Mapbox and OpenRouteService API services
+TEST_DATA_SOURCE=True
 
     
 
@@ -46,58 +46,41 @@ def sortByIndex(feature):
     return feature['properties']['index']
 
 
+# Set the GPS_POINT_LIMIT_PER_REQUEST to the maximum number of GPS points that can be sent to the API in a single request
 def launchOptimizationJob(orderedDatasetFeatures):
-    # print(dataset_features)
     GPS_POINT_LIMIT_PER_REQUEST = 11
+    API_PROVIDER_OPTIONS = ['open_route_service', 'mapbox', 'gmaps']
+    DEFAULT_PROVIDER='open_route_service'
     requestBundle = []
     for request in splitPerAPIRestrictions(orderedDatasetFeatures, GPS_POINT_LIMIT_PER_REQUEST):
-        #requestBundle.append(mapbox_apis.sendOptimizationRequest('walking',request))
-        #requestBundle.append(gmaps_api.sendOptimizationRequest(request))
-        requestBundle.append(open_route_service.sendOptimizationRequest(request))
+        if(DEFAULT_PROVIDER == 'open_route_service'):
+            requestBundle.append(open_route_service.sendOptimizationRequest(request))
+        elif(DEFAULT_PROVIDER == 'mapbox'):
+            requestBundle.append(mapbox_apis.sendOptimizationRequest('walking',request))
+        else:
+            requestBundle.append(gmaps_api.sendOptimizationRequest(request))
     
     return requestBundle
 
-
-# Read JSON data from file
-with open('source-data/regular-morph-location-web-response.json', 'r') as json_file:
-    json_morph_data= json.load(json_file)
-
-with open('source-data/mini-morph-locations-manual.json', 'r') as json_file:
-    json_mini_morph_data= json.load(json_file)
-
-geojson_content = geo_json_creator.create_geojson(json_mini_morph_data,json_morph_data)
-"""
-## TODO ##
-Use Travelling sales man algorithm to find the shortest path between all points
-order the points according to the order of the above TSP algorithm
-Divide the gps points to the max mapbox query limit for running directions
-Split the points and run the directions query to Mapbox ensuring the start/end points of each subset split can bee chained together
-Tie the directions together containing the shortest path following the road network and present it in GPX format
-Export the GPX file to be imported into Strava Route Creator or other GPS tracking software
-"""
-# Save the GPX content to a file
-with open('exported-data/morph-art-trail-geo.json', 'w') as gpx_file:
-    gpx_file.write(geojson_content)
-
-print("Conversion successful. GeoJSON file created.")
-
-print("Retrieve Mapbox Dataset Features")
-#datasetFeatures = mapbox_apis.getDatasetFeatures()
-datasetFeatures = dataset_features_response.fetchDatasetFeatures()
+# Retrieving Mapbox Dataset Features from test data source or live API hosted on personal maopbox account datasets
+print("Retrieving Mapbox Dataset Features")
+datasetFeatures = dataset_features_response.fetchDatasetFeatures() if TEST_DATA_SOURCE else mapbox_apis.getDatasetFeatures()
 print('Retrieved {0} features from Mapbox Dataset'.format(len(datasetFeatures)))
 
+# sort by index to get some semblance of real world placement order
+print("Index sorting morph locations..")
 datasetFeatures.sort(key=lambda x: x['properties']['index'], reverse=True)
 
-# Sort the original array based on the ordering array
-#sorted_array = [x for _, x in sorted(zip(ordering_array, datasetFeatures))]
-
-ordered_gps_points = approximate_route.approximatePathOrdering(datasetFeatures)
+# approximae route using Travelling Salesman Problem algorithm in preparation for relevant directions APIs
+print("Approximating route..")
+approximate_ordered_gps_points = approximate_route.approximatePathOrdering(datasetFeatures)
 ordered_features = []
-for point in ordered_gps_points:
+for point in approximate_ordered_gps_points:
     for feature in datasetFeatures:
         if feature['geometry']['coordinates'][1] == point[0] and feature['geometry']['coordinates'][0] == point[1]:
             ordered_features.append(feature)
 
-requestBundle = launchOptimizationJob(ordered_features)
-#geometry = requestBundle[0].get('trips',[])[0]['geometry']
-output_folium_map.generateMap(ordered_features,ordered_gps_points,requestBundle)
+print("Calculating optimal running routes..")
+routeBundles = launchOptimizationJob(ordered_features)
+print("Routes generated and stored..")
+output_folium_map.generateMap(ordered_features,approximate_ordered_gps_points,routeBundles)

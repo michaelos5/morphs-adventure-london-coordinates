@@ -12,6 +12,14 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "Morph Trail",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/MorphJsonToGeoJSONConverter.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }
